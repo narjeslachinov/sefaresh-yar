@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { Vazirmatn } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const vazir = Vazirmatn({ subsets: ["arabic", "latin"], display: "swap" });
-
+const vazir = localFont({
+  src: "./fonts/Vazirmatn.woff2",
+  weight: "100 900",
+  display: "swap",
+});
 export const metadata: Metadata = {
   title: "سفارش‌ یار",
   description: "سفارش زنده برای کافه‌رستوران‌ها",

@@ -1,0 +1,13 @@
+{
+	email ACME_EMAIL
+}
+
+# With a real domain, replace this line with the domain name and nothing else changes.
+95-38-187-46.sslip.io {
+	@compressible not path /api/events/stream
+	encode @compressible zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+	}
+}

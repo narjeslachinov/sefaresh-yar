@@ -1,0 +1,22 @@
+[Unit]
+Description=Sarfaresh-yar (Next.js)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=sarfaresh
+Group=sarfaresh
+WorkingDirectory=/opt/sarfaresh
+# The running app gets the restricted DB role only; admin credentials live in admin.env.
+EnvironmentFile=/etc/sarfaresh/app.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target
