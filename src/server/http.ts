@@ -39,45 +39,80 @@ const PG_ERRORS: Record<string, [number, string, string]> = {
 };
 
 /** Wraps a handler so every failure becomes a safe, uniform JSON error. */
-export function route<C = unknown>(handler: (req: Request, ctx: C) => Promise<Response>) {
+/** Wraps a handler so every response has a request ID and safe JSON errors. */
+export function route<C = unknown>(
+  handler: (req: Request, ctx: C) => Promise<Response>,
+) {
   return async (req: Request, ctx: C): Promise<Response> => {
+    const requestId = crypto.randomUUID();
+
     try {
-      return await handler(req, ctx);
+      const response = await handler(req, ctx);
+      response.headers.set("x-request-id", requestId);
+      return response;
     } catch (err) {
+      let response: Response;
+
       if (err instanceof HttpError) {
-        return Response.json(
+        response = Response.json(
           {
             error: {
               code: err.code,
               message: err.message,
+              requestId,
               ...(err.details ? { details: err.details } : {}),
             },
           },
           { status: err.status },
         );
-      }
-      if (err instanceof ZodError) {
-        return Response.json(
-          { error: { code: "invalid_input", message: "Invalid input" } },
+      } else if (err instanceof ZodError) {
+        response = Response.json(
+          {
+            error: {
+              code: "invalid_input",
+              message: "Invalid input",
+              requestId,
+            },
+          },
           { status: 400 },
         );
+      } else {
+        const pgCode = (err as { code?: string }).code;
+        const mapped = pgCode ? PG_ERRORS[pgCode] : undefined;
+
+        if (mapped) {
+          const [status, code, message] = mapped;
+
+          logger.warn(
+            { pgCode, requestId, path: new URL(req.url).pathname },
+            "database error mapped",
+          );
+
+          response = Response.json(
+            { error: { code, message, requestId } },
+            { status },
+          );
+        } else {
+          logger.error(
+            { err, requestId, path: new URL(req.url).pathname },
+            "unhandled error",
+          );
+
+          response = Response.json(
+            {
+              error: {
+                code: "internal",
+                message: "Internal error",
+                requestId,
+              },
+            },
+            { status: 500 },
+          );
+        }
       }
-      const requestId = crypto.randomUUID();
-      const pgCode = (err as { code?: string }).code;
-      const mapped = pgCode ? PG_ERRORS[pgCode] : undefined;
-      if (mapped) {
-        const [status, code, message] = mapped;
-        logger.warn(
-          { pgCode, requestId, path: new URL(req.url).pathname },
-          "database error mapped",
-        );
-        return Response.json({ error: { code, message, requestId } }, { status });
-      }
-      logger.error({ err, requestId, path: new URL(req.url).pathname }, "unhandled error");
-      return Response.json(
-        { error: { code: "internal", message: "Internal error", requestId } },
-        { status: 500 },
-      );
+
+      response.headers.set("x-request-id", requestId);
+      return response;
     }
   };
 }
